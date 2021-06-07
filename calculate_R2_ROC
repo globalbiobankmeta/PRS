@@ -1,0 +1,205 @@
+################################################################################
+## Calculate and compare ROC curves from PRS
+## date: 27-03-2021
+## author: EALM
+## version: 3.0
+################################################################################
+## new
+## 05-24-2021
+## added PRS scaling before AUC calculation wiht scale() function
+## added unified ROC plot 
+## 04-15-2021
+## added models with and without phenotypes (PCs)
+## removed cox-snell R2 calculation
+## established NagelkerkerR2 as standard R2 calculation
+
+### load packages
+library(data.table)
+library(tidyverse)
+library(fmsb)
+library(ROSE)
+library(pROC)
+###########
+######## load data ############
+## change input files if needed
+reffile<-"/groups/umcg-lifelines/tmp01/projects/ov19_0530/umcg-elopera/PRS_analyses/data/TAGC_extracted/full.TACG.pgs.profile"
+wkdir<-"/groups/umcg-lifelines/tmp01/projects/ov19_0530/umcg-elopera/PRS_analyses/results/20210525/ASTHMA/"
+pheno_file<-"/groups/umcg-lifelines/tmp01/projects/ov19_0530/umcg-elopera/phenotypes/UGLI_GBB_EUR_6_phenotypes_20PCs_v2/"
+
+setwd(wkdir)
+### get PRS for GBMI-Lifelines-out
+pgs<-fread(paste0(wkdir,"full.LIFELINES.pgs.profile"),data.table = F)
+### get PRS for TAGC
+pgs_TACG<-fread(reffile,data.table = F)
+## get phenotypes
+phenotypes<-fread(pheno_file,data.table = F)
+
+################################################################################
+######################## main ######
+################################################################################
+## join PGS lifelines with phenotypes
+pgs<-left_join(pgs,phenotypes,by=c("IID"="UGLI_ID"))
+## join joined database with PGS from TAGC 
+pgs$TACG<-pgs_TACG$SCORESUM[match(pgs$IID, pgs_TACG$IID)]
+## check
+table(pgs$ashtma_GBB)
+## remove individuals without information of asthma phenotype
+pgs<-pgs[which(!is.na(pgs$ashtma_GBB)),]
+
+#### standardize PGS distribution
+pgs$std_GBMI_LLout<-scale(pgs$SCORESUM)
+summary(pgs$std_GBMI_LLout)
+pgs$std_TACG<-scale(pgs$TACG)
+summary(pgs$std_TACG)
+
+################################################################################
+###################### evaluate phenotype prediction
+################################################################################
+## change outcome format
+pgs$asthma<-factor(pgs$ashtma_GBB)
+
+## split sample to validate (create data partition)
+set.seed(100)
+v1<-pgs$asthma
+names(v1)<-pgs$IID
+traindataind<-sample(v1,length(pgs$asthma)*0.5)
+### separate the populations
+traindata<-pgs[pgs$IID %in%names(traindataind),]
+`%!in%`=Negate(`%in%`)
+testdata<-pgs[pgs$IID %!in% names(traindataind) ,]
+table(testdata$asthma)
+table(traindata$asthma)
+
+##### logit models ####
+
+## base phenotype model: age+sex +10PCs
+PCtext<-paste("asthma~age_1A+gender",paste0("+PC",seq(1,10),collapse = ""))
+m_base<-glm(eval(parse(text=PCtext)) ,traindata,family="binomial")
+summary(m_base)
+baser2<-NagelkerkeR2(m_base)
+## prediction
+pred_base<-predict(m_base,newdata = testdata,family="binomial")##el "response" es muy improtante para que se interprete como binaria
+
+## model 1: age+sex +10PCs +PRSscore
+#GMBI
+PCtextGMBI<-paste(PCtext,"+std_GBMI_LLout")
+m1_GMBI<-glm(eval(parse(text=PCtextGMBI)),traindata,family="binomial")
+summary(m1_GMBI)
+disco_m1_GMBI_r2<-NagelkerkeR2(m1_GMBI)
+## prediction
+pred_GBMI_m1<-predict(m1_GMBI,newdata=testdata,type="response")
+m1_GBMI_test<-glm(eval(parse(text=PCtextGMBI)),testdata,family = "binomial")
+test_m1_GMBI_r2<-NagelkerkeR2(m1_GBMI_test)
+
+#TAGC
+PCtextTAGC<-paste(PCtext,"+std_TACG")
+m1_TAGC<-glm(eval(parse(text=PCtextTAGC)),traindata,family="binomial")
+summary(m1_TAGC)
+disco_m1_TAGC_r2<-NagelkerkeR2(m1_TAGC)
+## prediction
+pred_TAGC_m1<-predict(m1_TAGC,newdata=testdata,type="response")
+m1_TAGC_test<-glm(eval(parse(text=PCtextTAGC)),testdata,family = "binomial")
+test_m1_TAGC_r2<-NagelkerkeR2(m1_TAGC_test)
+
+## model 2 PRS alone: pheno~PRSscore
+#GMBI
+m2_GMBI<-glm(asthma~ std_GBMI_LLout,traindata,family="binomial")
+summary(m2_GMBI)
+disco_m2_GMBI_r2<-NagelkerkeR2(m2_GMBI)
+## prediction
+pred_GBMI_m2<-predict(m2_GMBI,newdata=testdata,type="response")
+m2_GBMI_test<-glm(asthma~ std_GBMI_LLout,testdata,family = "binomial")
+test_m2_GMBI_r2<-NagelkerkeR2(m2_GBMI_test)
+
+#TAGC
+m2_TAGC<-glm(asthma~ std_TACG,traindata,family="binomial")
+summary(m2_TAGC)
+disco_m2_TAGC_r2<-NagelkerkeR2(m2_TAGC)
+## prediction
+pred_TAGC_m2<-predict(m2_TAGC,newdata=testdata,type="response")
+m2_TAGC_test<-glm(asthma~ std_TACG,testdata,family = "binomial")
+test_m2_TAGC_r2<-NagelkerkeR2(m2_TAGC_test)
+
+################################################################################
+###################### Calculate ROCs
+################################################################################
+##organize results
+y_real<-factor(testdata$asthma,levels = c(0,1))
+response<-data.frame(cbind(y_real,pred_base,
+                           pred_GBMI_m1,pred_GBMI_m2,
+                           pred_TAGC_m1,pred_TAGC_m2))
+### calculate ROC curve
+
+roc_ci_base<-as.numeric(ci(response$y_real,response$pred_base))[c(1,3)]
+roc_base<-as.numeric(auc(response$y_real,response$pred_base))
+
+roc_ci_GBMI_m1<-as.numeric(ci(response$y_real,response$pred_GBMI_m1))[c(1,3)]
+roc_GBMI_m1<-as.numeric(auc(response$y_real,response$pred_GBMI_m1))
+
+roc_ci_GBMI_m2<-as.numeric(ci(response$y_real,response$pred_GBMI_m2))[c(1,3)]
+roc_GBMI_m2<-as.numeric(auc(response$y_real,response$pred_GBMI_m2))
+
+roc_ci_TAGC_m1<-as.numeric(ci(response$y_real,response$pred_TAGC_m1))[c(1,3)]
+roc_TAGC_m1<-as.numeric(auc(response$y_real,response$pred_TAGC_m1))
+
+roc_ci_TAGC_m2<-as.numeric(ci(response$y_real,response$pred_TAGC_m1))[c(1,3)]
+roc_TAGC_m2<-as.numeric(auc(response$y_real,response$pred_TAGC_m1))
+
+
+################## present results in a table #########################
+responsedb<-rbind(c("base",baser2,roc_base,roc_ci_base,"","",'',""),
+                  c("PRS-GMBI+base",disco_m1_GMBI_r2,roc_GBMI_m1,roc_ci_GBMI_m1,exp(m1_GMBI$coefficients[14]),
+                     exp(summary(m1_GMBI)$coefficients[14,1]-1.96*summary(m1_GMBI)$coefficients[14,2]),
+                     exp(summary(m1_GMBI)$coefficients[14,1]+1.96*summary(m1_GMBI)$coefficients[14,2]),
+                    summary(m1_GMBI)$coefficients[14,4] ),
+                  c("PRS-GMBI",disco_m2_GMBI_r2,roc_GBMI_m2,roc_ci_GBMI_m2,exp(m2_GMBI$coefficients[2]),
+                    exp(summary(m2_GMBI)$coefficients[2,1]-1.96*summary(m2_GMBI)$coefficients[2,2]),
+                    exp(summary(m2_GMBI)$coefficients[2,1]+1.96*summary(m2_GMBI)$coefficients[2,2]),
+                    summary(m2_GMBI)$coefficients[2,4]) ,
+                  c("PRS-TAGC+base",disco_m1_TAGC_r2,roc_TAGC_m1,roc_ci_TAGC_m1,exp(m1_TAGC$coefficients[14]),
+                    exp(summary(m1_TAGC)$coefficients[14,1]-1.96*summary(m1_TAGC)$coefficients[14,2]),
+                    exp(summary(m1_TAGC)$coefficients[14,1]+1.96*summary(m1_TAGC)$coefficients[14,2]),
+                    summary(m1_TAGC)$coefficients[14,4] ),
+                  c("PRS-TAGC",disco_m2_TAGC_r2,roc_TAGC_m2,roc_ci_TAGC_m2,exp(m2_TAGC$coefficients[2]),
+                    exp(summary(m2_TAGC)$coefficients[2,1]-1.96*summary(m2_TAGC)$coefficients[2,2]),
+                    exp(summary(m2_TAGC)$coefficients[2,1]+1.96*summary(m2_TAGC)$coefficients[2,2]), 
+                    summary(m2_TAGC)$coefficients[2,4])
+) 
+responsetable<-data.frame(responsedb)
+names(responsetable)<-c("Model","N","Nagelkerke-R2","AUC","AUC95CI-inf","AUC95CI-sup","OR","OR95CI-inf","OR95CI-sup","p-val")
+
+for (name in names(responsetable)){
+  responsetable[,name]<-unlist(responsetable[,name],use.names = FALSE)
+} 
+write.table(responsetable,"ROC.table.tsv",quote=F,row.names = F,sep="\t")
+################################################################################
+###########################plots ##
+################################################################################
+rocR_base<-roc(response$y_real,response$pred_base)
+rocR_GBMI_m1<-roc(response$y_real,response$pred_GBMI_m1)
+rocR_GBMI_m2<-roc(response$y_real,response$pred_GBMI_m2)
+rocR_TAGC_m1<-roc(response$y_real,response$pred_TAGC_m1)
+rocR_TAGC_m2<-roc(response$y_real,response$pred_TAGC_m2)
+roc.list<-list(rocR_base,rocR_GBMI_m1,rocR_GBMI_m2,rocR_TAGC_m1,rocR_TAGC_m2)
+names(roc.list)<-c(paste0("Base (AUC:",round(roc_base,3),")"),
+                   paste0("Base+GMBI-PRS (AUC:",round(roc_GBMI_m1,3),")"),
+                   paste0("GMBI-PRS (AUC:",round(roc_GBMI_m2,3),")"),
+                   paste0("Base+TAGC-PRS (AUC:",round(roc_TAGC_m1,3),")"),
+                   paste0("TAGC-PRS (AUC:",round(roc_TAGC_m2,3),")"))
+
+rocpalette<-c("4477AA",
+               "66CCEE",
+               "228833",
+               "997700",
+               "pink")
+
+p<-ggroc(roc.list)+ 
+  ggtitle("Asthma-PRS ROC curves") + 
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color="grey", linetype="dashed")+
+  scale_color_manual(values=rocpalette)+
+  labs(color="Model")+
+  theme_bw()
+
+ggsave("Asthma_PRS_comparison.pdf",p,dpi=300,width=7.5,height=5.0)
+
+#### done ####
