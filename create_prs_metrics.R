@@ -15,7 +15,7 @@ library(optparse) #for parsing arguments
 option_list <- list(
   make_option(c("--pop"), type = "character", default = NULL, help = "Target ancestry"),
   make_option(c("--pheno"), type = "character", default = NULL, help = "Phenotype in the phenotype file"),
-  make_option(c("--K"), type = "number", default = NULL, help = "Disease prevalence"),
+  make_option(c("--K"), type = "character", default = NULL, help = "Disease prevalence"),
   make_option(c("--covs"), type = "character", default = NULL, help = "Covariates included in the prediction model"),
   make_option(c("--phenofile"), type = "character", default = NULL, help = "Full path to phenotype files (including FID, IID, phenotypes)"),
   make_option(c("--popfile"), type = "character", default = NULL, help = "Full path to a file of ids for target population (in the format of FID, IID)"),
@@ -151,17 +151,20 @@ h2l_R2s <- function(k, r2, p) {
 
 P <- prs[PHENO == 1, .N] / N ##proportion of cases
 if(is.null(opt$K)){
-  opt$K <- P
+  K  <- P
+} else {
+  K <- as.numeric(opt$K)
 }
 
 # calculate liability scale using NKr2 
-h2l_NKr2 <- h2l_R2s(opt$K, NKr2, P)
+
+h2l_NKr2 <- h2l_R2s(K, NKr2, P)
 
 # Calculate 95% CI for Nagelkerke's R2 & h2l_NKr2
 boot_function <- function(data, indices){
   d <- data[indices,]
   NKr2 <- cal_NKr2_auc(d)$NKr2
-  h2l_NKr2 <- h2l_R2s(opt$K, NKr2, P)
+  h2l_NKr2 <- h2l_R2s(K, NKr2, P)
   return(c(NKr2, h2l_NKr2))
 }
 
@@ -185,7 +188,7 @@ h2l_NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][5], 6)
 # auc1 (acu1_2.5, auc1_97.5) - AUC using full model (& its 95% CIs)
 # auc2 (acu2_2.5, auc2_97.5) - AUC using PRS only (& its 95% CIs)
 
-res <- data.frame(prefix, opt$pheno, opt$pop, N, opt$K, P, 
+res <- data.frame(prefix, opt$pheno, opt$pop, N, K, P, 
                   NKr2, NKr2_pval, NKr2_2.5, NKr2_97.5,
                   h2l_NKr2, h2l_NKr2_2.5, h2l_NKr2_97.5,
                   tmp[,3:ncol(tmp)])
