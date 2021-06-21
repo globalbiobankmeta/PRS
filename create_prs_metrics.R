@@ -27,13 +27,12 @@ option_list <- list(
 
 opt = parse_args(OptionParser(option_list=option_list))
 
-# mycovs <- strsplit(opt$covs)
-# print(mycovs)
-# print(length(mycovs))
+prsfile <- opt$prsfile
 #################reading input files#################
-if(!is.null(opt$prsfile)){
-  prefix <- gsub(".profile", "",  opt$prsfile) 
-  prs_all <- fread(opt$prsfile)
+if(!is.null(prsfile)){
+  prs_all <- fread(prsfile)
+  fn <- tail(strsplit(prsfile, "/")[[1]], 1)
+  prefix <- gsub(".profile", "",  fn) 
 } else{
   print("Error: No PRS score files for input!")
 }

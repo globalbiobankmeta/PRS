@@ -14,7 +14,7 @@ covfile=""
 pcfile=""
 out=""
 
-Rscript --slave cal_prs_metrics.R \
+Rscript --slave create_prs_metrics.R \
 --pop ${Pop} --pheno ${PHENO} \
 --covs ${covs} \
 --K ${K} \
