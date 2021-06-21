@@ -7,7 +7,7 @@
 
 - Details for installation and required packages can be seen in [PRScs github page](https://github.com/getian107/PRScs)
 
-- Download LD reference panel from the same page, using `1KG-EUR` or `UKBB-EUR`
+- Download LD reference panel from the same page, using `1KG-EUR` and `UKBB-EUR`
 
 <br>
 
