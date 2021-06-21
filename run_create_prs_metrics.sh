@@ -1,19 +1,26 @@
-######demo example
-wkdir="/scratch/90days/uqywan67/"
-cd ${wkdir}
-sumstats="Asthma_Bothsex_leave_UKBB_inv_var_meta_GBMI_052021"
-Pop="EUR"
-PHENO="ASTHMA"
-covs="AgeAttend,Sex"
-K="0.058"
+#!/bin/bash
 
-Rscript gbmi/scripts/cal_prs_metrics.R \
+################################################################################
+# Please fill in the below variables
+################################################################################
+Pop="" #e.g., "EUR"
+PHENO="" #e.g., "ASTHMA"
+covs="" #e.g, "Age,Sex"
+K=NULL #e.g., 0.058, if not specified, please keep it as NULL, the script will use the proportion of cases in the target population by default
+phenofile="" 
+popfile=""
+prsfile=""
+covfile=""
+pcfile=""
+out=""
+
+Rscript --slave cal_prs_metrics.R \
 --pop ${Pop} --pheno ${PHENO} \
 --covs ${covs} \
---K $K \
---phenofile PRScs/phenotypes/ukb2_diseases23.phen \
---popfile PRScs/grm/UKB_British1-new_rel05.grm.id  \
---prsfile gbmi/clump/profiles/res_clumped/${sumstats}_clumpHM3_ld0.5_win500_ref500.S9.profile \
---covfile PRScs/phenotypes/ukb2_diseases23.phen \
---pcfile PRScs/phenotypes/1000G.ukb_proj.proj.eigenvec \
---out gbmi/outputs/${sumstats}_${Pop}_summary.txt 
+--K ${K} \
+--phenofile ${phenofile} \
+--popfile ${popfile}  \
+--prsfile ${prsfile} \
+--covfile $covfile \
+--pcfile ${pcfile} \
+--out ${out}
