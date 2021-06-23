@@ -127,6 +127,7 @@ cal_NKr2_auc <- function(dat){
                     auc2, auc2_2.5, auc2_97.5))
 }  
 
+prs <- na.omit(prs)
 tmp <- cal_NKr2_auc(prs)
 NKr2 <- tmp$NKr2
 NKr2_pval <- tmp$NKr2_pval
