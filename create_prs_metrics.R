@@ -72,7 +72,7 @@ if(length(opt$covs) > 0 & !is.null(opt$covfile) & !is.null(opt$covs)){
 }
 
 if(!is.null(opt$pcfile)){
-  pcs <- fread(opt$pcfile)[,c(1:12)]
+  pcs <- fread(opt$pcfile, select = c("FID", "IID", paste0("PC", 1:10)) )
   names(pcs) <- c("FID", "IID", paste0("PC", 1:10))
   pcvecs <- paste0("PC", 1:10)
   prs <- cbind(prs, pcs[prs, on = "IID",][, ..pcvecs])
