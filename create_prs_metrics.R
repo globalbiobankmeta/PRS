@@ -83,7 +83,7 @@ if(!is.null(opt$pcfile)){
 #################expression for models#################
 if(!is.null(opt$covfile) & !is.null(opt$covs)){
   exp0 <- paste0( paste0(mycovs, collapse = " + "), paste0(" + PC", 1:10, collapse = "")) # base model with covariates only
-  exp1 <- paste0(paste0("ZSCORE + ", mycovs, collapse = " + "), paste0(" + PC", 1:10, collapse = "")) # full model with PRS
+  exp1 <- paste0("ZSCORE + ",paste0( mycovs, collapse = " + "), paste0(" + PC", 1:10, collapse = "")) # full model with PRS
 } else{
   exp0 <- "1"
   exp1 <- paste0("ZSCORE")
