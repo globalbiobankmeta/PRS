@@ -110,11 +110,11 @@ cal_NKr2_auc <- function(dat){
   NKr2_pval <- pchisq(devdiff, df, lower.tail = F)
   
   ## Calculate AUC using full model (PRS+covariates)
-  auc1 <- round(auc(prs$PHENO, glm1$linear.predictors), 3)
+  auc1 <- round(auc(dat$PHENO, glm1$linear.predictors), 3)
   
   # Calculate AUC using only PRS
   glm3 <- glm(PHENO ~ ZSCORE, data = dat, family = binomial(logit))
-  auc2 <- round(auc(prs$PHENO, glm3$linear.predictors), 3)
+  auc2 <- round(auc(dat$PHENO, glm3$linear.predictors), 3)
   
   auc1_2.5 <- round(ci.auc(dat$PHENO, glm1$linear.predictors)[1], 3)
   auc1_97.5 <- round(ci.auc(dat$PHENO, glm1$linear.predictors)[3], 3)
