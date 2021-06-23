@@ -72,7 +72,7 @@ if(length(opt$covs) > 0 & !is.null(opt$covfile) & !is.null(opt$covs)){
 }
 
 if(!is.null(opt$pcfile)){
-  pcs <- fread(opt$pcfile)[,c(1:12)]
+  pcs <- fread(opt$pcfile, select = c("FID", "IID", paste0("PC", 1:10)) )
   names(pcs) <- c("FID", "IID", paste0("PC", 1:10))
   pcvecs <- paste0("PC", 1:10)
   prs <- cbind(prs, pcs[prs, on = "IID",][, ..pcvecs])
@@ -83,7 +83,7 @@ if(!is.null(opt$pcfile)){
 #################expression for models#################
 if(!is.null(opt$covfile) & !is.null(opt$covs)){
   exp0 <- paste0( paste0(mycovs, collapse = " + "), paste0(" + PC", 1:10, collapse = "")) # base model with covariates only
-  exp1 <- paste0(paste0("ZSCORE + ", mycovs, collapse = " + "), paste0(" + PC", 1:10, collapse = "")) # full model with PRS
+  exp1 <- paste0("ZSCORE + ", paste0(mycovs, collapse = " + "), paste0(" + PC", 1:10, collapse = "")) # full model with PRS
 } else{
   exp0 <- "1"
   exp1 <- paste0("ZSCORE")
@@ -110,11 +110,11 @@ cal_NKr2_auc <- function(dat){
   NKr2_pval <- pchisq(devdiff, df, lower.tail = F)
   
   ## Calculate AUC using full model (PRS+covariates)
-  auc1 <- round(auc(prs$PHENO, glm1$linear.predictors), 3)
+  auc1 <- round(auc(dat$PHENO, glm1$linear.predictors), 3)
   
   # Calculate AUC using only PRS
   glm3 <- glm(PHENO ~ ZSCORE, data = dat, family = binomial(logit))
-  auc2 <- round(auc(prs$PHENO, glm3$linear.predictors), 3)
+  auc2 <- round(auc(dat$PHENO, glm3$linear.predictors), 3)
   
   auc1_2.5 <- round(ci.auc(dat$PHENO, glm1$linear.predictors)[1], 3)
   auc1_97.5 <- round(ci.auc(dat$PHENO, glm1$linear.predictors)[3], 3)
@@ -127,6 +127,7 @@ cal_NKr2_auc <- function(dat){
                     auc2, auc2_2.5, auc2_97.5))
 }  
 
+prs <- na.omit(prs)
 tmp <- cal_NKr2_auc(prs)
 NKr2 <- tmp$NKr2
 NKr2_pval <- tmp$NKr2_pval
