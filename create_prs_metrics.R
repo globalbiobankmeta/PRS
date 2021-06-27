@@ -89,15 +89,15 @@ if(!is.null(pcfile)){
   if(nrow(pcs) == 0){
     pcs <- fread(pcfile)[,c(1:12)]
     names(pcs) <- c("FID", "IID", paste0("PC", 1:10))
-    pcvecs <- paste0("PC", 1:10)
-    prs <- cbind(prs, pcs[prs, on = "IID",][, ..pcvecs])
   }
+  pcvecs <- paste0("PC", 1:10)
+  prs <- cbind(prs, pcs[prs, on = "IID",][, ..pcvecs])
 } else{
   print("No PC files for input")
 }
 
 prs <- na.omit(prs)
-N <-  prs[PHENO %in% c(0.,1), .N]
+N <-  prs[PHENO %in% c(0,1), .N]
 
 
 #################expression for models#################
@@ -219,7 +219,7 @@ names(res) <- c("prsFile", "Phenotype", "Pop", "N", "K", "P",
                 "auc1", "auc1_2.5", "auc1_97.5", 
                 "auc2", "auc2_2.5", "auc2_97.5")
 
-print(res)
+#print(res)
 
 fwrite(res, file = out, sep = "\t")
 
