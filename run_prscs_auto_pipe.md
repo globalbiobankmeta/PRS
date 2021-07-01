@@ -66,7 +66,7 @@ Then you can run <span style="color:red"> `bash merge_scoreFiles.sh`</span>.
 ## 6. Calculate the PRS accuracy metrics
 
 Details have been given in **`run_create_prs_metrics.md`**.
-[run_create_prs_metrics.md](run_create_prs_metrics.md#calculate-prs-accuracy-metrics).
+(run_create_prs_metrics.md#calculate-prs-accuracy-metrics).
 
 
 <br>
