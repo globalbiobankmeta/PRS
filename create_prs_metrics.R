@@ -57,7 +57,8 @@ if(!is.null(popfile)){
 if(!is.null(phenofile)){
   phen <- fread(phenofile) ##including fields FID, IID, ...phenotypes...
   prs[,PHENO := phen[prs, on = "IID"][,get(..pheno)]]
-  
+  prs <- prs[PHENO %in% c(0, 1, 2)] ##remove PHENO as -9 or other NA
+
   if(max(prs[,PHENO], na.rm = T) == 2){
     prs[,PHENO := PHENO - 1 ]# change disease phenotype from 1/2 control case to 0/1
   }
