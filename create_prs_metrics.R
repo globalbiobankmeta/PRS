@@ -171,7 +171,7 @@ h2l_R2s <- function(k, r2, p) {
 } 
 
 P <- prs[PHENO == 1, .N] / N ##proportion of cases
-if(is.null(K)){
+if(K == "NULL" | is.null(K)){
   K  <- P
 } else {
   K <- as.numeric(K)
