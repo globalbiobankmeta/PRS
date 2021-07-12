@@ -42,7 +42,7 @@
 
 In the script `toPRScsFormat.sh`, we will filter out variants in GBMI GWAS sumstats as described [here](https://docs.google.com/document/d/1CU8l6HavYPA8zHeqpbCco7eqMeDNFfoCDZb83QX-rkw/edit). Then, we will reformat your GWAS sumstats with the format as: `SNP A1 A2 BETA P` to prepare for running PRScs, as shown:
 
-![](tmp.png)
+![](tmp_img/tmp.png)
 
 
 <br>
@@ -53,7 +53,7 @@ In the script `toPRScsFormat.sh`, we will filter out variants in GBMI GWAS sumst
  - <span style="color:red"> `sumstats`</span>: Full path and file name to your downloaded GWAS sumstats.
  - <span style="color:red"> `headers`</span>: The column names of GWAS sumstats for "SNP,A1,A2,BETA,P" in the exactly same order, separated by comma. e.g., "rsid,REF,ALT,inv_var_meta_beta,inv_var_meta_p" as shown:
  
-![](tmp2.png)
+![](tmp_img/tmp2.png)
 
 
 <br>
@@ -85,7 +85,7 @@ You have to fill the variables in <span style="color:red"> `run_prscs_auto.sh`</
 
 Then you can run PRScs-auto using <span style="color:red"> `bash run_prscs_auto.sh`</span>. You are expected to get the output file (similar to *_pst_eff_a1_b0.5_phiauto_chr22.txt) for each chromosome shown as below:
 
-![](tmp3.png)
+![](tmp_img/tmp3.png)
 
 
 For your reference: the whole process takes ~1hour, 10GB to finish by chromosome when using 4CPUs for leave-UKBB-out Asthma GBMI GWAS.
