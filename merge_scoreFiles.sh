@@ -1,9 +1,9 @@
 wkdir=""
 file_pattern=""
-outdir=""
+out_file=""
 
 
 Rscript merge_scoreFiles.R \
 --wkdir $wkdir \
 --file_pattern $file_pattern \
---outf $outdir
+--out_file $out_file
