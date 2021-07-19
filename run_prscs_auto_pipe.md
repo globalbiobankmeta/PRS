@@ -24,7 +24,7 @@
   - Download [1KG-EUR](https://www.dropbox.com/s/mt6var0z96vb6fv/ldblk_1kg_eur.tar.gz?dl=0), e.g., run `wget https://www.dropbox.com/s/mt6var0z96vb6fv/ldblk_1kg_eur.tar.gz?dl=0` in your specific directory, then `tar -zxvf ldblk_1kg_eur.tar.gz`
   - Download [UKBB-EUR](https://www.dropbox.com/s/t9opx2ty6ucrpib/ldblk_ukbb_eur.tar.gz?dl=0), e.g., run `wget https://www.dropbox.com/s/t9opx2ty6ucrpib/ldblk_ukbb_eur.tar.gz?dl=0` in your specific directory, then `tar -zxvf ldblk_ukbb_eur.tar.gz`.
 - Leave-YOUR-BIOBANK-out GBMI GWAS summary statistics
-  - For 14 endpoints, including `AAA AcApp Asthma Appendectomy COPD Gout HCM HF IPF POAG Stroke Utc ThC VTE`
+  - For 14 endpoints, including `AAA AcApp Asthma Appendectomy COPD Gout HCM HF IPF POAG Stroke ThC UtC VTE`
 - [Public GWAS summary statistics](https://docs.google.com/document/d/1gniQxQQs90h1pIGiIcbI-KdMP0kQ0NlF/edit) 
   - **Only include those not overlap with your specific Biobank**. 
 - Download the analysis scripts in the [git repository](https://github.com/globalbiobankmeta/PRS)
