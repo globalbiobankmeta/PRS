@@ -76,6 +76,8 @@ if(!is.null(phenofile)){
 scores <- c("SCORESUM", "SCORE1_SUM")
 prs[,SCORESUM := get(grep(paste(scores, collapse = "|"), names(prs), value = T))]
 prs[,ZSCORE := SCORESUM - mean(SCORESUM[PHENO == 0])/sd(SCORESUM[PHENO==0])] # z-score of the profile score
+prs[,ZSCORE1 := (SCORESUM - mean(SCORESUM[PHENO == 0]))/sd(SCORESUM[PHENO==0])] # z-score of the profile score
+
 
 if(length(covs) > 0 & !is.null(covfile) & !is.null(covs)){
   covf <- fread(covfile)
