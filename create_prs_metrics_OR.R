@@ -118,19 +118,24 @@ glm_nt <- glm(as.formula(paste("PHENO ~ ", exp)), data = prs, family = binomial(
 ORs <- exp(glm_nt$coefficients)
 ORs_2.5 <- exp(glm_nt$coefficients - 1.96 * summary(glm_nt)$coefficients[,2])
 ORs_97.5 <- exp(glm_nt$coefficients + 1.96 * summary(glm_nt)$coefficients[,2])
+ORs_pvals <- summary(glm_nt)$coefficients[,4]
 
 outs <- data.table()
 for(i in 1:ntiles){
+  
   mean_control <- prs[PHENO == 0 & nt == i, mean(ZSCORE)]
   mean_case <- prs[PHENO == 1 & nt == i, mean(ZSCORE)]
   median_control <- prs[PHENO == 0 & nt == i, median(ZSCORE)]
   median_case <- prs[PHENO == 1 & nt == i, median(ZSCORE)]
   N_control <- prs[PHENO == 0 & nt == i, .N]
   N_case <- prs[PHENO == 1 & nt == i, .N]
-  
-  outs_tmp <- data.table(cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORs[i], ORs_2.5[i], ORs_97.5[i], mean_control, mean_case, median_control, median_case)
+  if(i == 1){
+    outs_tmp <- data.table(cohort, ldref, prefix, pheno, pop, i, N_control, N_case, 1, 1, 1, 0, mean_control, mean_case, median_control, median_case)
+  } else{
+    outs_tmp <- data.table(cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORs[i], ORs_2.5[i], ORs_97.5[i], ORs_pvals[i], mean_control, mean_case, median_control, median_case)
+  }
   outs <- rbind(outs, outs_tmp)
 }
-names(outs) <- c("Cohort", "LDref", "prsFile", "Phenotype", "Pop", "Nt","N_control", "N_case",  "OR", "OR_2.5", "OR_97.5", "Mean_PGS_controls", "Mean_PGS_cases", "Median_PGS_controls", "Median_PGS_cases")
+names(outs) <- c("Cohort", "LDref", "prsFile", "Phenotype", "Pop", "Nt","N_control", "N_case",  "OR", "OR_2.5", "OR_97.5","OR_pval", "Mean_PGS_controls", "Mean_PGS_cases", "Median_PGS_controls", "Median_PGS_cases")
 
 fwrite(outs, outf, sep = "\t")
