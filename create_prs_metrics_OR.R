@@ -101,41 +101,132 @@ if(pcfile != "NULL") {
 prs <- na.omit(prs)
 
 
+## cut ZSCORE based on ntiles
+prs$nt = cut(prs$ZSCORE, breaks=c(quantile(prs$ZSCORE, probs = seq(0, 1, by = 1/ntiles))), labels=1:ntiles, include.lowest=T)
+prs[,nt2 := ifelse(nt != ntiles, 1, 2)]
+prs$nt2 <- relevel(factor(prs$nt2), ref='1')
+if(ntiles %% 2 == 0){
+  mid_tiles <- c(ntiles/2, ntiles/2 + 1)
+} else{
+  mid_tiles <- c((ntiles + 1) / 2)
+}
+prs_sub <- prs[nt %in% c(ntiles, mid_tiles)]
+prs_sub[,nt3 := ifelse(nt != ntiles, 1, 2)]
+prs_sub$nt3 <- relevel(factor(prs_sub$nt3), ref='1')
+
 #################expression for models#################
 if(covfile != "NULL" & covs != "NULL" &  pcfile != "NULL"){
   exp <- paste0("nt + ", paste0(mycovs, collapse = " + "), paste0(" + ", pcvecs, collapse = "")) # full model with PRS
+  exp2 <- paste0("nt2 + ", paste0(mycovs, collapse = " + "), paste0(" + ", pcvecs, collapse = "")) # full model with PRS
+  exp3 <- paste0("nt3 + ", paste0(mycovs, collapse = " + "), paste0(" + ", pcvecs, collapse = "")) # full model with PRS
+  exp4 <- paste0("nt4 + ", paste0(mycovs, collapse = " + "), paste0(" + ", pcvecs, collapse = "")) # full model with PRS
 } else {
   exp <- paste0("nt")
+  exp2 <- paste0("nt2")
+  exp3 <- paste0("nt3")
+  exp4 <- paste0("nt4")
 }
 
-## cut ZSCORE based on ntiles
-prs$nt = cut(prs$ZSCORE, breaks=c(quantile(prs$ZSCORE, probs = seq(0, 1, by = 1/ntiles))), labels=1:ntiles, include.lowest=T)
-
 glm_nt <- glm(as.formula(paste("PHENO ~ ", exp)), data = prs, family = binomial(logit))
+glm_nt2 <- glm(as.formula(paste("PHENO ~ ", exp2)), data = prs, family = binomial(logit))
+glm_nt3 <- glm(as.formula(paste("PHENO ~ ", exp3)), data = prs_sub, family = binomial(logit))
 
 
-#Odds ratio for being a case compared to control in each decile
+#Odds ratio for being a case compared to control in each tile when using first tile as referenced group
 ORs <- exp(glm_nt$coefficients)
 ORs_2.5 <- exp(glm_nt$coefficients - 1.96 * summary(glm_nt)$coefficients[,2])
 ORs_97.5 <- exp(glm_nt$coefficients + 1.96 * summary(glm_nt)$coefficients[,2])
 ORs_pvals <- summary(glm_nt)$coefficients[,4]
 
+##OR for Top tile VS the remaining individuals
+ORs_topVSother <- exp(glm_nt2$coefficients)
+ORs_topVSother_2.5 <- exp(glm_nt2$coefficients - 1.96 * summary(glm_nt2)$coefficients[,2])
+ORs_topVSother_97.5 <- exp(glm_nt2$coefficients + 1.96 * summary(glm_nt2)$coefficients[,2])
+ORs_topVSother_pvals <- summary(glm_nt2)$coefficients[,4]
+
+##OR for Top tile VS the middle
+ORs_topVSmid <- exp(glm_nt3$coefficients)
+ORs_topVSmid_2.5 <- exp(glm_nt3$coefficients - 1.96 * summary(glm_nt3)$coefficients[,2])
+ORs_topVSmid_97.5 <- exp(glm_nt3$coefficients + 1.96 * summary(glm_nt3)$coefficients[,2])
+ORs_topVSmid_pvals <- summary(glm_nt3)$coefficients[,4]
+
 outs <- data.table()
+ref_group <- "first_tile"
 for(i in 1:ntiles){
-  
   mean_control <- prs[PHENO == 0 & nt == i, mean(ZSCORE)]
   mean_case <- prs[PHENO == 1 & nt == i, mean(ZSCORE)]
   median_control <- prs[PHENO == 0 & nt == i, median(ZSCORE)]
   median_case <- prs[PHENO == 1 & nt == i, median(ZSCORE)]
   N_control <- prs[PHENO == 0 & nt == i, .N]
   N_case <- prs[PHENO == 1 & nt == i, .N]
+  
+  mean_control_other <- prs[PHENO == 0 & nt2 == 1, mean(ZSCORE)]
+  mean_case_other <- prs[PHENO == 1 & nt2 == 1, mean(ZSCORE)]
+  median_control_other <- prs[PHENO == 0 & nt2 == 1, median(ZSCORE)]
+  median_case_other <- prs[PHENO == 1 & nt2 == 1, median(ZSCORE)]
+  N_control_other <- prs[PHENO == 0 & nt2 == 1, .N]
+  N_case_other <- prs[PHENO == 1 & nt2 == 1, .N]
+  
+  mean_control_mid <- prs_sub[PHENO == 0 & nt3 == 1, mean(ZSCORE)]
+  mean_case_mid <- prs_sub[PHENO == 1 & nt3 == 1, mean(ZSCORE)]
+  median_control_mid <- prs_sub[PHENO == 0 & nt3 == 1, median(ZSCORE)]
+  median_case_mid <- prs_sub[PHENO == 1 & nt3 == 1, median(ZSCORE)]
+  N_control_mid <- prs_sub[PHENO == 0 & nt3 == 1, .N]
+  N_case_mid <- prs_sub[PHENO == 1 & nt3 == 1, .N]
+
   if(i == 1){
-    outs_tmp <- data.table(cohort, ldref, prefix, pheno, pop, i, N_control, N_case, 1, 1, 1, 0, mean_control, mean_case, median_control, median_case)
-  } else{
-    outs_tmp <- data.table(cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORs[i], ORs_2.5[i], ORs_97.5[i], ORs_pvals[i], mean_control, mean_case, median_control, median_case)
+    outs_tmp <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, 1, 1, 1, 0, mean_control, mean_case, median_control, median_case)
+  } else if(i == ntiles){
+    outs_tmp1 <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORs[i], ORs_2.5[i], ORs_97.5[i], ORs_pvals[i], mean_control, mean_case, median_control, median_case)
+    outs_tmp2 <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, "topVSother", N_control_other, N_case_other, ORs_topVSother[2], ORs_topVSother_2.5[2], ORs_topVSother_97.5[2], ORs_topVSother_pvals[2], mean_control_other, mean_case_other, median_control_other, median_case_other)
+    outs_tmp3 <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, "topVSmid", N_control_mid, N_case_mid, ORs_topVSmid[2], ORs_topVSmid_2.5[2], ORs_topVSmid_97.5[2], ORs_topVSmid_pvals[2], mean_control_mid, mean_case_mid, median_control_mid, median_case_mid)
+    names(outs_tmp2) <- names(outs_tmp1)
+    names(outs_tmp3) <- names(outs_tmp1)
+    
+    outs_tmp <- rbind(outs_tmp1, outs_tmp2, outs_tmp3)
+  } else {
+    outs_tmp <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORs[i], ORs_2.5[i], ORs_97.5[i], ORs_pvals[i], mean_control, mean_case, median_control, median_case)
   }
   outs <- rbind(outs, outs_tmp)
 }
-names(outs) <- c("Cohort", "LDref", "prsFile", "Phenotype", "Pop", "Nt","N_control", "N_case",  "OR", "OR_2.5", "OR_97.5","OR_pval", "Mean_PGS_controls", "Mean_PGS_cases", "Median_PGS_controls", "Median_PGS_cases")
+
+
+#################ORs using the middle tiles as referenced group#################
+prsII <- prs
+prsII[,nt4 := ifelse(nt %in% mid_tiles, -1, nt)]
+prsII$nt4 <- factor(prsII$nt4)
+prsII$nt4 <- relevel(prsII$nt4, ref='-1')
+
+glm_ntII <- glm(as.formula(paste("PHENO ~ ", exp4)), data = prsII, family = binomial(logit))
+
+
+#Odds ratio for being a case compared to control in each tile
+ORsII <- exp(glm_ntII$coefficients)
+ORsII_2.5 <- exp(glm_ntII$coefficients - 1.96 * summary(glm_ntII)$coefficients[,2])
+ORsII_97.5 <- exp(glm_ntII$coefficients + 1.96 * summary(glm_ntII)$coefficients[,2])
+ORsII_pvals <- summary(glm_ntII)$coefficients[,4]
+
+ref_group <- "mid_tile"
+for(i in 1:ntiles){
+  mean_control <- prs[PHENO == 0 & nt == i, mean(ZSCORE)]
+  mean_case <- prs[PHENO == 1 & nt == i, mean(ZSCORE)]
+  median_control <- prs[PHENO == 0 & nt == i, median(ZSCORE)]
+  median_case <- prs[PHENO == 1 & nt == i, median(ZSCORE)]
+  N_control <- prs[PHENO == 0 & nt == i, .N]
+  N_case <- prs[PHENO == 1 & nt == i, .N]
+  
+  if (i < min(mid_tiles)) {
+    outs_tmp <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORsII[i + 1], ORsII_2.5[i + 1], ORsII_97.5[i + 1], ORsII_pvals[i + 1], mean_control, mean_case, median_control, median_case)
+  } else if (i %in% mid_tiles){
+    outs_tmp <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, 1, 1, 1, 0, mean_control, mean_case, median_control, median_case)
+  } else if(length(mid_tiles) > 1 & i > max(mid_tiles)){
+    outs_tmp <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORsII[i - 1], ORsII_2.5[i - 1], ORsII_97.5[i - 1], ORsII_pvals[i - 1], mean_control, mean_case, median_control, median_case)
+  } else {
+    outs_tmp <- data.table(ref_group, cohort, ldref, prefix, pheno, pop, i, N_control, N_case, ORsII[i], ORsII_2.5[i], ORsII_97.5[i], ORsII_pvals[i], mean_control, mean_case, median_control, median_case)
+  }
+  outs <- rbind(outs, outs_tmp)
+}
+
+names(outs) <- c("Referenced_group", "Cohort", "LDref", "prsFile", "Phenotype", "Pop", "Nt","N_control", "N_case",  "OR", "OR_2.5", "OR_97.5","OR_pval", "Mean_PGS_controls", "Mean_PGS_cases", "Median_PGS_controls", "Median_PGS_cases")
 
 fwrite(outs, outf, sep = "\t")
