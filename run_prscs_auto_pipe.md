@@ -51,7 +51,7 @@ In the script `toPRScsFormat.sh`, we will filter out variants in GBMI GWAS sumst
  After filling the variables in <span style="color:red"> `toPRScsFormat.sh`</span>, specifically:
  
  - <span style="color:red"> `sumstats`</span>: Full path and file name to your downloaded GWAS sumstats.
- - <span style="color:red"> `headers`</span>: The column names of GWAS sumstats for "SNP,A1,A2,BETA,P" in the exactly same order, separated by comma. e.g., "rsid,REF,ALT,inv_var_meta_beta,inv_var_meta_p" as shown:
+ - <span style="color:red"> `headers`</span>: The column names of GWAS sumstats for "SNP,A1,A2,BETA,P" in the exactly same order, separated by comma. e.g., "rsid,ALT,REF,inv_var_meta_beta,inv_var_meta_p" as shown:
  
 ![](tmp_img/tmp2.png)
 
