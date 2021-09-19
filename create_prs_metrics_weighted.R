@@ -17,6 +17,7 @@ option_list <- list(
   make_option(c("--pop"), type = "character", default = NULL, help = "Target ancestry"),
   make_option(c("--pheno"), type = "character", default = NULL, help = "Phenotype name in the phenotype file"),
   make_option(c("--prop"), type = "character", default = NULL, help = "Proportion of total samples selected to tune the parameter or get the weight"),
+  make_option(c("--reps"), type = "character", default = NULL, help = "The number of replications repeated of data splitting"),
   make_option(c("--K"), type = "character", default = NULL, help = "Disease prevalence"),
   make_option(c("--covs"), type = "character", default = NULL, help = "Covariates included in the prediction model, separated by comma"),
   make_option(c("--pc_numbers"), type = "character", default = "PC1,PC2,PC3,PC4,PC5,PC6,PC7,PC8,PC9,PC10", help = "PCs included in the prediction model, separated by comma"),
@@ -28,7 +29,6 @@ option_list <- list(
   make_option(c("--ldref"), type = "character", default = NULL, help = "The LD reference panel used (e.g., 1KG or UKB)"),
   make_option(c("--out_weights"), type = "character", default = NULL, help = "Full path and file name for the output file of the prs accuracy metrics using cross-validation"),
   make_option(c("--wt"), type = "character", default = "NKr2", help = "Statistic used as the weight, e.g., NKr2 or h2l_NKr2"),
-  make_option(c("--out_prsfile_wt"), type = "character", default = NULL, help = "Full path and file name for the output file of the weighted PRS in the validation cohort"),
   make_option(c("--out_test_metrics"), type = "character", default = NULL, help = "Full path and file name for the output file of accuracy metrics in the test cohort")
 )
 
@@ -36,27 +36,22 @@ opt = parse_args(OptionParser(option_list=option_list))
 
 
 files <- opt$files
-popfile <- opt$popfile
-prop <- as.numeric(opt$prop)
-phenofile <- opt$phenofile
-pheno <- opt$pheno
-covfile <- opt$covfile
-covs <- opt$covs
-pcfile <- opt$pcfile
-pc_numbers <- opt$pc_numbers
-K <- opt$K
-out_weights <- opt$out_weights
 pop <- opt$pop
+pheno <- opt$pheno
+prop <- as.numeric(opt$prop)
+reps <- as.numeric(opt$reps)
+K <- opt$K
+covs <- opt$covs
+pc_numbers <- opt$pc_numbers
+phenofile <- opt$phenofile
+popfile <- opt$popfile
+covfile <- opt$covfile
+pcfile <- opt$pcfile
 cohort <- opt$cohort_name
 ldref <- opt$ldref
 out_weights <- opt$out_weights
 wt <- opt$wt
-out_prsfile_wt <- opt$out_prsfile_wt
 out_test_metrics <- opt$out_test_metrics
-
-
-
-
 
 #########################Functions used#########################
 cal_NKr2_auc <- function(dat){
@@ -124,7 +119,7 @@ boot_function <- function(data, indices){
 }
 
 
-################split target cohort into two parts################
+################Read input files################
 if(phenofile != "NULL"){
   phen <- fread(phenofile) 
 } else{
@@ -137,17 +132,6 @@ if(popfile != "NULL"){
   ids <- phen[,c("FID", "IID")]
   names(ids) <- c("V1", "V2")
 }
-
-select_cols <- c("FID", "IID", pheno)
-phen_tmp <- phen[,..select_cols]
-names(phen_tmp)[3] <- "Y"
-phen_tmp <- phen_tmp[Y %in% c(0,1,2)]
-full_ids <- phen_tmp[IID %in% ids$V2]
-
-set.seed(1234)
-ids_1 <- full_ids[sample(nrow(full_ids), nrow(full_ids) * prop)] ###used as validation cohort
-ids_2 <- full_ids[!IID %in% ids_1$IID] ####used as testing cohort
-
 
 if(length(covs) > 0 & covfile != "NULL" & covs != "NULL"){
   covf <- fread(covfile)
@@ -177,92 +161,14 @@ if(!is.null(covfile) & !is.null(covs)){
   exp1 <- paste0("ZSCORE")
 }
 
+select_cols <- c("FID", "IID", pheno)
+phen_tmp <- phen[,..select_cols]
+names(phen_tmp)[3] <- "Y"
+phen_tmp <- phen_tmp[Y %in% c(0,1,2)]
+full_ids <- phen_tmp[IID %in% ids$V2]
+
 ################get the accuracy metrics for each score file in validation cohort###########
 vectorFiles <- strsplit(files, ",")[[1]]
-
-res <- data.table()
-for(prsfile in vectorFiles){
-  #################reading input files#################
-  prs_all <- fread(prsfile)
-  fn <- tail(strsplit(prsfile, "/")[[1]], 1)
-  prefix <- gsub(paste(c(".profile", ".sscore"), collapse = "|"), "",  fn) 
-  
-  prs <- prs_all[IID %in% ids_1$IID]
-  
-  prs[,PHENO := phen[prs, on = "IID"][,get(..pheno)]]
- 
-  if(max(prs[,PHENO], na.rm = T) == 2){
-    prs[,PHENO := PHENO - 1 ]# change disease phenotype from 1/2 control case to 0/1
-  }
-  
-  ##get SCORESUM based on plink version
-  scores <- c("SCORESUM", "SCORE1_SUM")
-  prs[,SCORESUM := get(grep(paste(scores, collapse = "|"), names(prs), value = T))]
-  prs[,ZSCORE := (SCORESUM - mean(SCORESUM[PHENO == 0]))/sd(SCORESUM[PHENO==0])] # z-score of the profile score
-  
-  prs <- cbind(prs, covf[prs, on = "IID",][, mycovs, with = FALSE])
-  prs <- cbind(prs, pcs[prs, on = "IID",][, ..pcvecs])
-  prs <- na.omit(prs)
-  
-  
-  Part <- "Validation"
-  N <-  prs[PHENO %in% c(0,1), .N]
-  
-  P <- prs[PHENO == 1, .N] / N ##proportion of cases
-  if(K == "NULL" | is.null(K)){
-    K  <- P
-  } else {
-    K <- as.numeric(K)
-  }
-  
-  tmp <- cal_NKr2_auc(prs)
-  NKr2 <- tmp$NKr2
-  NKr2_pval <- tmp$NKr2_pval
-  
-  # calculate liability scale using NKr2 
-  h2l_NKr2 <- h2l_R2s(K, NKr2, P)
-  
-  results <- boot(prs, boot_function, R = 1000)
-  
-  NKr2_2.5 <- round(boot.ci(results, type ="perc", index = 1)[[4]][1,][4], 6)
-  NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 1)[[4]][1,][5], 6)
-  h2l_NKr2_2.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][4], 6)
-  h2l_NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][5], 6)
-  
-  ###########################################################
-  ### all of the output summarised in a single data frame ###
-  ###########################################################
-  # Part - Subset of target population (validation/test)
-  # cohort - specific Biobank name
-  # ldref - LD reference panel
-  # prefix - prefix for PRS score filename
-  # N - total sample size with non-NA phenotypes
-  # K - base population risk of disease/disease prevalence used for calculating variance explained in liability scale
-  # P - proportion of sample that are cases
-  # NKr2 (NKr2_2.5, NKr2_97.5) - Nagelkerke's R2 (& its 95% CIs)
-  # NKr2_pval - p value of the NKr2 
-  # h2l_NKr2 &(h2l_NKr2_2.5, h2l_NKr2_97.5) - proportion of variance explained by the score on the liability scale (& its 95% CIs)
-  # auc1 (acu1_2.5, auc1_97.5) - AUC using full model (& its 95% CIs)
-  # auc2 (acu2_2.5, auc2_97.5) - AUC using PRS only (& its 95% CIs)
-  
-  res_part <- data.frame(Part, cohort, ldref, prefix, pheno, pop, N, K, P, 
-                         NKr2, NKr2_pval, NKr2_2.5, NKr2_97.5,
-                         h2l_NKr2, h2l_NKr2_2.5, h2l_NKr2_97.5,
-                         tmp[,3:ncol(tmp)])
-  
-  names(res_part) <- c("Part", "Cohort", "LDref", "prsFile", "Phenotype", "Pop", "N", "K", "P", 
-                       "NKr2","NKr2_pval", "NKr2_2.5", "NKr2_97.5", 
-                       "h2l_NKr2", "h2l_NKr2_2.5", "h2l_NKr2_97.5", 
-                       "auc1", "auc1_2.5", "auc1_97.5", 
-                       "auc2", "auc2_2.5", "auc2_97.5")
-  
-  res <- rbind(res, res_part)
-}
-
-fwrite(res, file = out_weights, sep = "\t") ##cross-validation results 
-
-##########################merge_socreFiles_weighted##########################
-wts1 <- res[Part == "Validation", get(..wt)]
 scores1 <- c("#FID", "IID", "SCORE1_SUM")
 scores2 <- c("FID", "IID", "SCORESUM")
 
@@ -278,69 +184,131 @@ listDf <- lapply(vectorFiles, function(fileName){
 
 dfMerged <- Reduce(function(...) merge(..., by = c("FID", "IID")), listDf)
 
+res_wts <- data.table()
+res_final <- data.table()
 
-if(grepl(".sscore", vectorFiles[1])){
-  dfMerged[,SCORE1_SUM := rowSums(as.matrix(dfMerged[,3:ncol(dfMerged)])  %*% diag(wts1))]
-  prs_wt <- dfMerged[,c("FID", "IID", "SCORE1_SUM")]
-} else{
-  dfMerged[,SCORESUM := rowSums(as.matrix(dfMerged[,3:ncol(dfMerged)]) %*% diag(wts1))]
-  prs_wt <- dfMerged[,c("FID", "IID", "SCORESUM")]
+set.seed(2345)
+for(Rep in 1:reps) {
+  ids_1 <- full_ids[sample(nrow(full_ids), nrow(full_ids) * prop)] ###used as validation cohort
+  ids_2 <- full_ids[!IID %in% ids_1$IID] ####used as testing cohort
+  res <- data.table()
+  for(prsfile in vectorFiles){
+    #################reading input files#################
+    prs_all <- fread(prsfile)
+    fn <- tail(strsplit(prsfile, "/")[[1]], 1)
+    prefix <- gsub(paste(c(".profile", ".sscore"), collapse = "|"), "",  fn) 
+    
+    prs <- prs_all[IID %in% ids_1$IID]
+    
+    prs[,PHENO := phen[prs, on = "IID"][,get(..pheno)]]
+    
+    if(max(prs[,PHENO], na.rm = T) == 2){
+      prs[,PHENO := PHENO - 1 ]# change disease phenotype from 1/2 control case to 0/1
+    }
+    
+    ##get SCORESUM based on plink version
+    scores <- c("SCORESUM", "SCORE1_SUM")
+    prs[,SCORESUM := get(grep(paste(scores, collapse = "|"), names(prs), value = T))]
+    prs[,ZSCORE := (SCORESUM - mean(SCORESUM[PHENO == 0]))/sd(SCORESUM[PHENO==0])] # z-score of the profile score
+    
+    prs <- cbind(prs, covf[prs, on = "IID",][, mycovs, with = FALSE])
+    prs <- cbind(prs, pcs[prs, on = "IID",][, ..pcvecs])
+    prs <- na.omit(prs)
+    
+    
+    Part <- "Validation"
+    N <-  prs[PHENO %in% c(0,1), .N]
+    
+    P <- prs[PHENO == 1, .N] / N ##proportion of cases
+    if(K == "NULL" | is.null(K)){
+      K  <- P
+    } else {
+      K <- as.numeric(K)
+    }
+    
+    tmp <- cal_NKr2_auc(prs)
+    NKr2 <- tmp$NKr2
+    NKr2_pval <- tmp$NKr2_pval
+    
+    # calculate liability scale using NKr2 
+    h2l_NKr2 <- h2l_R2s(K, NKr2, P)
+
+    res_part <- data.frame(Part, cohort, ldref, prefix, pheno, pop, N, K, P, 
+                           NKr2, NKr2_pval,
+                           h2l_NKr2, Rep)
+    
+    names(res_part) <- c("Part", "Cohort", "LDref", "prsFile", "Phenotype", "Pop", "N", "K", "P", 
+                         "NKr2","NKr2_pval", 
+                         "h2l_NKr2", "Rep")
+    
+    res <- rbind(res, res_part)
+  }
+  res_wts <- rbind(res_wts, res)
+  
+  ##########################merge_socreFiles_weighted##########################
+  wts1 <- res[Part == "Validation", get(..wt)]
+
+  if(grepl(".sscore", vectorFiles[1])){
+    dfMerged_2 <- dfMerged
+    dfMerged_2$SCORE1_SUM <- rowSums(as.matrix(dfMerged[,3:ncol(dfMerged)])  %*% diag(wts1))
+    prs_wt <- dfMerged_2[,c("FID", "IID", "SCORE1_SUM")]
+  } else{
+    dfMerged_2$SCORESUM <- rowSums(as.matrix(dfMerged[,3:ncol(dfMerged)]) %*% diag(wts1))
+    prs_wt <- dfMerged_2[,c("FID", "IID", "SCORESUM")]
+  }
+  
+  ######################calculate PRS accuracy metrics based on weighted PRS in the test cohort####################
+  res2 <- data.table()
+  
+  prs_wt2 <- prs_wt[IID %in% ids_2$IID]
+  prs_wt2[,PHENO := phen[prs_wt2, on = "IID"][,get(..pheno)]]
+  
+  if(max(prs_wt2[,PHENO], na.rm = T) == 2){
+    prs_wt2[,PHENO := PHENO - 1 ]# change disease phenotype from 1/2 control case to 0/1
+  }
+  
+  ##get SCORESUM based on plink version
+  scores <- c("SCORESUM", "SCORE1_SUM")
+  prs_wt2[,SCORESUM := get(grep(paste(scores, collapse = "|"), names(prs_wt2), value = T))]
+  prs_wt2[,ZSCORE := (SCORESUM - mean(SCORESUM[PHENO == 0]))/sd(SCORESUM[PHENO==0])] # z-score of the profile score
+  
+  prs_wt2 <- cbind(prs_wt2, covf[prs_wt2, on = "IID",][, mycovs, with = FALSE])
+  prs_wt2 <- cbind(prs_wt2, pcs[prs_wt2, on = "IID",][, ..pcvecs])
+  prs_wt2 <- na.omit(prs_wt2)
+  
+  
+  Part2 <- "Test"
+  N_wt <-  prs_wt2[PHENO %in% c(0,1), .N]
+  
+  P_wt <- prs_wt2[PHENO == 1, .N] / N_wt ##proportion of cases
+  K  <- P_wt
+  
+  tmp <- cal_NKr2_auc(prs_wt2)
+  NKr2 <- tmp$NKr2
+  NKr2_pval <- tmp$NKr2_pval
+  
+  # calculate liability scale using NKr2 
+  h2l_NKr2 <- h2l_R2s(K, NKr2, P_wt)
+  
+  results <- boot(prs_wt2, boot_function, R = 1000)
+  
+  NKr2_2.5 <- round(boot.ci(results, type ="perc", index = 1)[[4]][1,][4], 6)
+  NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 1)[[4]][1,][5], 6)
+  h2l_NKr2_2.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][4], 6)
+  h2l_NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][5], 6)
+  
+  res2 <- data.frame(Part2, cohort, ldref, prefix, pheno, pop, N_wt, K, P_wt, 
+                     NKr2, NKr2_pval, NKr2_2.5, NKr2_97.5,
+                     h2l_NKr2, h2l_NKr2_2.5, h2l_NKr2_97.5,
+                     tmp[,3:ncol(tmp)], Rep)
+  
+  names(res2) <- c("Part", "Cohort", "LDref", "prs_wt2File", "Phenotype", "Pop", "N", "K", "P", 
+                   "NKr2","NKr2_pval", "NKr2_2.5", "NKr2_97.5", 
+                   "h2l_NKr2", "h2l_NKr2_2.5", "h2l_NKr2_97.5", 
+                   "auc1", "auc1_2.5", "auc1_97.5", 
+                   "auc2", "auc2_2.5", "auc2_97.5", "Rep")
+  res_final <- rbind(res_final, res2)
 }
 
-fwrite(prs_wt, out_prsfile_wt, sep = "\t")
-
-
-######################calculate PRS accuracy metrics based on weighted PRS in the test cohort####################
-
-res2 <- data.table()
-
-prs_wt2 <- prs_wt[IID %in% ids_2$IID]
-prs_wt2[,PHENO := phen[prs_wt2, on = "IID"][,get(..pheno)]]
-
-if(max(prs_wt2[,PHENO], na.rm = T) == 2){
-  prs_wt2[,PHENO := PHENO - 1 ]# change disease phenotype from 1/2 control case to 0/1
-}
-
-##get SCORESUM based on plink version
-scores <- c("SCORESUM", "SCORE1_SUM")
-prs_wt2[,SCORESUM := get(grep(paste(scores, collapse = "|"), names(prs_wt2), value = T))]
-prs_wt2[,ZSCORE := (SCORESUM - mean(SCORESUM[PHENO == 0]))/sd(SCORESUM[PHENO==0])] # z-score of the profile score
-
-prs_wt2 <- cbind(prs_wt2, covf[prs_wt2, on = "IID",][, mycovs, with = FALSE])
-prs_wt2 <- cbind(prs_wt2, pcs[prs_wt2, on = "IID",][, ..pcvecs])
-prs_wt2 <- na.omit(prs_wt2)
-
-
-Part2 <- "Test"
-N_wt <-  prs_wt2[PHENO %in% c(0,1), .N]
-
-P_wt <- prs_wt2[PHENO == 1, .N] / N_wt ##proportion of cases
-K  <- P_wt
-
-tmp <- cal_NKr2_auc(prs_wt2)
-NKr2 <- tmp$NKr2
-NKr2_pval <- tmp$NKr2_pval
-
-# calculate liability scale using NKr2 
-h2l_NKr2 <- h2l_R2s(K, NKr2, P_wt)
-
-results <- boot(prs_wt2, boot_function, R = 100)
-
-NKr2_2.5 <- round(boot.ci(results, type ="perc", index = 1)[[4]][1,][4], 6)
-NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 1)[[4]][1,][5], 6)
-h2l_NKr2_2.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][4], 6)
-h2l_NKr2_97.5 <- round(boot.ci(results, type ="perc", index = 2)[[4]][1,][5], 6)
-
-res2 <- data.frame(Part2, cohort, ldref, prefix, pheno, pop, N_wt, K, P_wt, 
-                       NKr2, NKr2_pval, NKr2_2.5, NKr2_97.5,
-                       h2l_NKr2, h2l_NKr2_2.5, h2l_NKr2_97.5,
-                       tmp[,3:ncol(tmp)])
-
-names(res2) <- c("Part", "Cohort", "LDref", "prs_wt2File", "Phenotype", "Pop", "N", "K", "P", 
-                     "NKr2","NKr2_pval", "NKr2_2.5", "NKr2_97.5", 
-                     "h2l_NKr2", "h2l_NKr2_2.5", "h2l_NKr2_97.5", 
-                     "auc1", "auc1_2.5", "auc1_97.5", 
-                     "auc2", "auc2_2.5", "auc2_97.5")
-
-fwrite(res2, file = out_test_metrics, sep = "\t") ##cross-validation results 
-
+fwrite(res_wts, file = out_weights, sep = "\t") ## the weighted accurracies across replicates
+fwrite(res_final, file = out_test_metrics, sep = "\t") ## the final accurracies across replicates

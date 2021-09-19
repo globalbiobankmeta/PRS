@@ -20,12 +20,11 @@ sumstats <- opt$sumstats
 headers <- opt$headers
 headers1 <- strsplit(headers, ",")[[1]]
 
-als <- c("A", "T", "G" ,"C")
 
 gwas <- fread(sumstats)
 gwas1 <- gwas[is_diff_AF_gnomAD == "no" & is_strand_flip == "no"][,..headers1]
 names(gwas1) <- c("SNP", "A1", "A2", "BETA", "P")
-gwas2 <- gwas1[A1 %in% als & A2 %in% als][grep("rs", SNP)]
+gwas2 <- gwas1[!duplicated(SNP)][grep("rs", SNP)]
 
 if(grepl(".gz", sumstats)){
   outf <- gsub(".txt.gz", "", sumstats)
