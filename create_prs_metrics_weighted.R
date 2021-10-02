@@ -28,7 +28,7 @@ option_list <- list(
   make_option(c("--cohort_name"), type = "character", default = NULL, help = "Your specific Biobanks name"),
   make_option(c("--ldref"), type = "character", default = NULL, help = "The LD reference panel used (e.g., 1KG or UKB)"),
   make_option(c("--out_weights"), type = "character", default = NULL, help = "Full path and file name for the output file of the prs accuracy metrics using cross-validation"),
-  make_option(c("--wt"), type = "character", default = "NKr2", help = "Statistic used as the weight, e.g., NKr2 or h2l_NKr2"),
+  make_option(c("--wt"), type = "character", default = "NKr2", help = "Statistic used as the weight, e.g., NKr2 or h2l_NKr2 or R2v or R"),
   make_option(c("--out_test_metrics"), type = "character", default = NULL, help = "Full path and file name for the output file of accuracy metrics in the test cohort")
 )
 
@@ -169,12 +169,15 @@ full_ids <- phen_tmp[IID %in% ids$V2]
 
 ################get the accuracy metrics for each score file in validation cohort###########
 vectorFiles <- strsplit(files, ",")[[1]]
-scores1 <- c("#FID", "IID", "SCORE1_SUM")
+scores1 <- c("#FID", "FID", "IID", "SCORE1_SUM")
 scores2 <- c("FID", "IID", "SCORESUM")
 
 listDf <- lapply(vectorFiles, function(fileName){
   if(grepl(".sscore", fileName)){
-    dfFile <- fread(fileName,  stringsAsFactors = F)[,..scores1]
+    dfFile <- fread(fileName,  stringsAsFactors = F)
+    cols <- grep(paste(scores1, collapse="|"), names(dfFile), value=TRUE)
+    dfFile <- dfFile[,..cols]
+    
   } else if(grepl(".profile", fileName)){
     dfFile <- fread(fileName,  stringsAsFactors = F)[,..scores2]
   }
@@ -209,6 +212,8 @@ for(Rep in 1:reps) {
     ##get SCORESUM based on plink version
     scores <- c("SCORESUM", "SCORE1_SUM")
     prs[,SCORESUM := get(grep(paste(scores, collapse = "|"), names(prs), value = T))]
+    fits <- summary(glm(PHENO ~ SCORESUM, data = prs, family = binomial(logit))) ###check the effect direction 
+    prs[,SCORESUM := SCORESUM * sign(fits$coefficients[[2]])]
     prs[,ZSCORE := (SCORESUM - mean(SCORESUM[PHENO == 0]))/sd(SCORESUM[PHENO==0])] # z-score of the profile score
     
     prs <- cbind(prs, covf[prs, on = "IID",][, mycovs, with = FALSE])
@@ -218,6 +223,13 @@ for(Rep in 1:reps) {
     
     Part <- "Validation"
     N <-  prs[PHENO %in% c(0,1), .N]
+    
+    ###linear regression
+    prs[,PHENO_sd := scale(resid(lm(as.formula(paste("PHENO ~ ", exp0)), data = prs)))]
+    lm1 <- lm(PHENO_sd ~ ZSCORE, data = prs)
+    lm0 <- lm(PHENO_sd ~ 1, data = prs)
+    R2v <- 1 - exp((2/N)*(logLik(lm0)[1] - logLik(lm1)[1]))
+    R <- summary(lm1)$coefficients[2]
     
     P <- prs[PHENO == 1, .N] / N ##proportion of cases
     if(K == "NULL" | is.null(K)){
@@ -235,14 +247,15 @@ for(Rep in 1:reps) {
 
     res_part <- data.frame(Part, cohort, ldref, prefix, pheno, pop, N, K, P, 
                            NKr2, NKr2_pval,
-                           h2l_NKr2, Rep)
+                           h2l_NKr2, Rep, R2v, R)
     
     names(res_part) <- c("Part", "Cohort", "LDref", "prsFile", "Phenotype", "Pop", "N", "K", "P", 
                          "NKr2","NKr2_pval", 
-                         "h2l_NKr2", "Rep")
+                         "h2l_NKr2", "Rep", "R2v", "R")
     
     res <- rbind(res, res_part)
   }
+  
   res_wts <- rbind(res_wts, res)
   
   ##########################merge_socreFiles_weighted##########################

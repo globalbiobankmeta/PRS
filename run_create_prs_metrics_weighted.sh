@@ -18,7 +18,7 @@ cohort="" # Your specific Biobank name
 ldref="" # LD reference panel used, e.g., 1KG or UKBB
 files="" ##list of scorefile, separated by comma
 out_weights="" ##output file name for weights metrics
-wt="" ##variable for weights. NKr2 or h2l_NKr2
+wt="" ##variable for weights. NKr2 or h2l_NKr2 or R2v or R
 out_test_metrics="" ## output file name for final accuracy metrics in test cohort
 
 Rscript --slave create_prs_metrics_weighted.R \
