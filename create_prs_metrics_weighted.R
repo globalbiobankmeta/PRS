@@ -266,6 +266,7 @@ for(Rep in 1:reps) {
     dfMerged_2$SCORE1_SUM <- rowSums(as.matrix(dfMerged[,3:ncol(dfMerged)])  %*% diag(wts1))
     prs_wt <- dfMerged_2[,c("FID", "IID", "SCORE1_SUM")]
   } else{
+    dfMerged_2 <- dfMerged
     dfMerged_2$SCORESUM <- rowSums(as.matrix(dfMerged[,3:ncol(dfMerged)]) %*% diag(wts1))
     prs_wt <- dfMerged_2[,c("FID", "IID", "SCORESUM")]
   }
